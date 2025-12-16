@@ -11,3 +11,7 @@ This repository includes:
 - A step-by-step **installation & configuration framework** that covers prerequisite setup, resource provisioning, identity and security configuration, agent deployment, CI/CD integration, monitoring, testing and future extension patterns.
 
 Refer to the `docs/` directory for detailed specifications and guidance.
+
+## GitHub Integration
+
+See `docs/github-webhook-integration.md` for the webhook-first ingestion plan, including signature verification, event routing, retry expectations, and migration steps from polling to webhooks.
