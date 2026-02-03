@@ -1,0 +1,10 @@
+parameters:
+  environment: 'production'
+  rollback_steps:
+    - script: echo "Rolling back deployment"
+
+stages:
+  - stage: Rollback
+    jobs:
+      - job: Rollback
+        steps: ${{ parameters.rollback_steps }}
