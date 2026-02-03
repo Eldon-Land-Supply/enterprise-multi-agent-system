@@ -154,6 +154,10 @@ class RateLimitedRequestQueue:
             if queued is None:
                 self._queue.task_done()
                 return
+            if queued.future.cancelled():
+                self._queue.task_done()
+                self._metrics.queue_depth = self._queue.qsize()
+                continue
             self._metrics.queue_depth = self._queue.qsize()
             wait_time = time.monotonic() - queued.enqueued_at
             self._metrics.record_wait(wait_time)
@@ -168,7 +172,7 @@ class RateLimitedRequestQueue:
                 async with semaphore:
                     outcome = await queued.request_fn()
             except Exception as exc:  # noqa: BLE001 - propagate failure to caller
-                queued.future.set_exception(exc)
+                self._try_set_future_exception(queued.future, exc)
                 self._queue.task_done()
                 self._metrics.queue_depth = self._queue.qsize()
                 continue
@@ -183,13 +187,32 @@ class RateLimitedRequestQueue:
                 asyncio.create_task(self._requeue_after_delay(queued, delay))
                 continue
 
-            queued.future.set_result(outcome)
+            self._try_set_future_result(queued.future, outcome)
             self._metrics.completed += 1
             self._queue.task_done()
             self._metrics.queue_depth = self._queue.qsize()
 
     async def _requeue_after_delay(self, queued: _QueuedRequest, delay: float) -> None:
         await asyncio.sleep(delay)
+        if queued.future.cancelled():
+            return
         await self._queue.put(queued.next_attempt())
         self._metrics.queue_depth = self._queue.qsize()
 
+    def _try_set_future_result(
+        self,
+        future: asyncio.Future[RequestOutcome],
+        outcome: RequestOutcome,
+    ) -> None:
+        if future.done():
+            return
+        future.set_result(outcome)
+
+    def _try_set_future_exception(
+        self,
+        future: asyncio.Future[RequestOutcome],
+        exc: Exception,
+    ) -> None:
+        if future.done():
+            return
+        future.set_exception(exc)
