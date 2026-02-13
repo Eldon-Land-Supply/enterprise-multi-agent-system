@@ -15,3 +15,6 @@ Refer to the `docs/` directory for detailed specifications and guidance.
 Additional planning resources:
 
 - `docs/framework-survey.md` – survey of orchestration frameworks, their fit with provider abstraction, and queue-aligned integration options.
+## GitHub Integration
+
+See `docs/github-webhook-integration.md` for the webhook-first ingestion plan, including signature verification, event routing, retry expectations, and migration steps from polling to webhooks.

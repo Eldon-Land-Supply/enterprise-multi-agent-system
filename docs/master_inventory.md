@@ -11,3 +11,5 @@ This table enumerates all agents needed to implement the multi‑agent AI/automa
 | A05 | Long‑Running Workflow Agent | Azure Logic App | Handle stateful, multi‑day processes (approvals, waits) beyond a single Power Automate flow’s lifetime | Event | Orchestrator invocation | Orchestrator; Teams | Medium |
 | A06 | Conversational Bot Agent | Teams/Outlook Bot | Provide a chat interface for end‑users; route user requests to the orchestrated workflows | Message | User messages | Orchestrator; Dataverse | Medium |
 | A07 | Data Pipeline Agent | Microsoft Fabric / Azure Data Factory | Perform heavy ETL/ELT operations; prepare large datasets in OneLake for ML/OpenAI consumption | Scheduled & API | Source data stores | Dataverse; ML agent | Medium |
+
+| A08 | Health & Recovery Agent | Azure Function / Service Bus | Monitor system health, reprocess failed messages, and alert operators; improve workflow reliability | Scheduled & event | Service Bus dead-letter queues; WorkflowRuns in Dataverse | Orchestrator; Teams notifications | High |
