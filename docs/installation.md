@@ -1,6 +1,6 @@
 # Installation & Configuration Framework
 
-This installation framework provides a step‑by‑step guide for setting up the multi‑agent system described in this repository.  It is organized into phases to ensure a logical and repeatable process.  While the instructions are comprehensive, tailor the specifics (such as names and regions) to your organisation’s standards and policies.
+This installation framework provides a step‑by‑step guide for setting up the multi‑agent system described in this repository.  It is organized into phases to ensure a logical and repeatable process.  While the instructions are comprehensive, tailor the specifics (such as names and regions) to your organisation’s standards and policies.  For runtime interaction views (webhook ingress, queue/backoff, caching and alerting), refer to the diagrams in `docs/architecture.md` so platform resources are configured to support the operational flows.
 
 ## Phase 0 – Prerequisites & Global Setup
 
