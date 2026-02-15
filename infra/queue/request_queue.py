@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
 
@@ -19,8 +20,8 @@ class RequestOutcome:
 
 
 @dataclass
-class QueueMetrics:
-    """Metrics describing queue state and backoff activity."""
+class RateLimitedQueueMetrics:
+    """Metrics describing queue state and backoff activity for RateLimitedRequestQueue."""
 
     total_enqueued: int = 0
     completed: int = 0
@@ -83,97 +84,14 @@ class RateLimitedRequestQueue:
         self._base_backoff = base_backoff_seconds
         self._max_backoff = max_backoff_seconds
         self._jitter_ratio = jitter_ratio
-        self._metrics = QueueMetrics()
+        self._metrics = RateLimitedQueueMetrics()
         self._workers: list[asyncio.Task[None]] = []
         self._host_semaphores: Dict[str, asyncio.Semaphore] = {}
         self._host_backoff: Dict[str, float] = {}
-import asyncio
-import random
-import time
-from collections import defaultdict
-from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, Optional
-
-
-@dataclass
-class FakeResponse:
-    """Lightweight response container for tests and adapters."""
-
-    status: int
-    headers: Dict[str, Any] = field(default_factory=dict)
-    payload: Any = None
-
-
-@dataclass
-class BackoffEvent:
-    host: str
-    attempt: int
-    delay: float
-    retry_after: Optional[float]
-    status: int
-
-
-class QueueMetrics:
-    def __init__(self) -> None:
-        self.queue_depths: Dict[str, int] = defaultdict(int)
-        self.wait_times: Dict[str, list[float]] = defaultdict(list)
-        self.backoff_events: list[BackoffEvent] = []
-
-    def record_depth(self, host: str, depth: int) -> None:
-        self.queue_depths[host] = depth
-
-    def record_wait_time(self, host: str, wait_time: float) -> None:
-        self.wait_times[host].append(wait_time)
-
-    def record_backoff(
-        self, host: str, attempt: int, delay: float, retry_after: Optional[float], status: int
-    ) -> None:
-        self.backoff_events.append(BackoffEvent(host, attempt, delay, retry_after, status))
-
-
-@dataclass
-class _RequestTask:
-    operation: Callable[[], Awaitable[Any]]
-    future: asyncio.Future
-    enqueued_at: float
-    attempt: int = 0
-    max_attempts: int = 5
-
-
-@dataclass
-class _HostState:
-    queue: asyncio.Queue[_RequestTask]
-    retry_after: float = 0.0
-    backoff_attempts: int = 0
-    workers: list[asyncio.Task] = field(default_factory=list)
-
-
-class RateLimitExceeded(Exception):
-    pass
-
-
-class RequestQueue:
-    def __init__(
-        self,
-        *,
-        default_concurrency: int = 1,
-        base_backoff: float = 0.5,
-        max_backoff: float = 30.0,
-        jitter: float = 0.25,
-        metrics: Optional[QueueMetrics] = None,
-        randomizer: Callable[[float, float], float] = random.uniform,
-    ) -> None:
-        self._default_concurrency = max(1, default_concurrency)
-        self._base_backoff = base_backoff
-        self._max_backoff = max_backoff
-        self._jitter = jitter
-        self._metrics = metrics or QueueMetrics()
-        self._randomizer = randomizer
-        self._host_states: Dict[str, _HostState] = {}
         self._closed = False
 
     @property
-    def metrics(self) -> QueueMetrics:
+    def metrics(self) -> RateLimitedQueueMetrics:
         return self._metrics
 
     def _get_host_semaphore(self, host: str) -> asyncio.Semaphore:
@@ -306,6 +224,95 @@ class RequestQueue:
             future.set_exception(exc)
         except asyncio.InvalidStateError:
             return
+
+
+# Alternative queue implementation with different metrics
+
+@dataclass
+class FakeResponse:
+    """Lightweight response container for tests and adapters."""
+
+    status: int
+    headers: Dict[str, Any] = field(default_factory=dict)
+    payload: Any = None
+
+
+@dataclass
+class BackoffEvent:
+    host: str
+    attempt: int
+    delay: float
+    retry_after: Optional[float]
+    status: int
+
+
+class QueueMetrics:
+    """Alternative metrics implementation for RequestQueue."""
+
+    def __init__(self) -> None:
+        self.queue_depths: Dict[str, int] = defaultdict(int)
+        self.wait_times: Dict[str, list[float]] = defaultdict(list)
+        self.backoff_events: list[BackoffEvent] = []
+
+    def record_depth(self, host: str, depth: int) -> None:
+        self.queue_depths[host] = depth
+
+    def record_wait_time(self, host: str, wait_time: float) -> None:
+        self.wait_times[host].append(wait_time)
+
+    def record_backoff(
+        self, host: str, attempt: int, delay: float, retry_after: Optional[float], status: int
+    ) -> None:
+        self.backoff_events.append(BackoffEvent(host, attempt, delay, retry_after, status))
+
+
+@dataclass
+class _RequestTask:
+    operation: Callable[[], Awaitable[Any]]
+    future: asyncio.Future
+    enqueued_at: float
+    attempt: int = 0
+    max_attempts: int = 5
+
+
+@dataclass
+class _HostState:
+    queue: asyncio.Queue[_RequestTask]
+    retry_after: float = 0.0
+    backoff_attempts: int = 0
+    workers: list[asyncio.Task] = field(default_factory=list)
+
+
+class RateLimitExceeded(Exception):
+    pass
+
+
+class RequestQueue:
+    """Alternative queue implementation with per-host state management."""
+
+    def __init__(
+        self,
+        *,
+        default_concurrency: int = 1,
+        base_backoff: float = 0.5,
+        max_backoff: float = 30.0,
+        jitter: float = 0.25,
+        metrics: Optional[QueueMetrics] = None,
+        randomizer: Callable[[float, float], float] = random.uniform,
+    ) -> None:
+        self._default_concurrency = max(1, default_concurrency)
+        self._base_backoff = base_backoff
+        self._max_backoff = max_backoff
+        self._jitter = jitter
+        self._metrics = metrics or QueueMetrics()
+        self._randomizer = randomizer
+        self._host_states: Dict[str, _HostState] = {}
+        self._closed = False
+
+    @property
+    def metrics(self) -> QueueMetrics:
+        return self._metrics
+
     async def enqueue(
         self,
         host: str,

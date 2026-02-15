@@ -1,5 +1,5 @@
 """Infrastructure queue package."""
 
-from .request_queue import QueueMetrics, RateLimitedRequestQueue, RequestOutcome
+from .request_queue import QueueMetrics, RateLimitedQueueMetrics, RateLimitedRequestQueue, RequestOutcome
 
-__all__ = ["QueueMetrics", "RateLimitedRequestQueue", "RequestOutcome"]
+__all__ = ["QueueMetrics", "RateLimitedQueueMetrics", "RateLimitedRequestQueue", "RequestOutcome"]
