@@ -48,7 +48,9 @@ def test_request_retries_then_succeeds(monkeypatch):
     responses: List[object] = [Timeout("boom"), make_response(200, {"ok": True})]
     session.request.side_effect = responses
 
-    client = GitHubApiClient(token="token", session=session, max_retries=2, backoff_factor=0.01)
+    client = GitHubApiClient(
+        token="token", session=session, max_retries=2, backoff_factor=0.01
+    )
 
     with patch("time.sleep") as mocked_sleep:
         result = client._request("GET", "/status", operation="retry_test")
