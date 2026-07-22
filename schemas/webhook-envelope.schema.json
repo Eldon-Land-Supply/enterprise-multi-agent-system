@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eldonlandsupply.com/schemas/webhook-envelope.schema.json",
+  "title": "Canonical Webhook Event Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "source",
+    "type",
+    "data",
+    "correlation_id",
+    "received_at",
+    "metadata"
+  ],
+  "properties": {
+    "version": { "const": "1" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "source": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "type": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "data": { "type": "object" },
+    "correlation_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "received_at": { "type": "string", "format": "date-time" },
+    "subject": { "type": ["string", "null"], "maxLength": 1024 },
+    "metadata": { "type": "object" }
+  }
+}

@@ -54,7 +54,9 @@ def test_exponential_backoff_and_retry_after_is_persisted():
                 return RequestOutcome(status_code=429, headers={"retry-after": "0.2"})
             return RequestOutcome(status_code=200, headers={})
 
-        result_task = asyncio.create_task(queue.enqueue("api.github.com", flaky_request))
+        result_task = asyncio.create_task(
+            queue.enqueue("api.github.com", flaky_request)
+        )
         await asyncio.wait_for(result_task, timeout=2)
         await queue.close()
         return attempts, queue.metrics
@@ -92,11 +94,14 @@ def test_metrics_capture_queue_depth_and_wait_times():
     assert metrics.total_enqueued == 2
     assert metrics.queue_depth == 0
     assert metrics.average_wait_time > 0
-import time
 
-import pytest
 
-from infra.queue.request_queue import FakeResponse, QueueMetrics, RateLimitExceeded, RequestQueue
+from infra.queue.request_queue import (
+    FakeResponse,
+    QueueMetrics,
+    RateLimitExceeded,
+    RequestQueue,
+)
 
 
 def test_serializes_requests_per_host():
@@ -120,9 +125,13 @@ async def _test_serializes_requests_per_host():
     await queue.close()
 
     assert [r.status for r in responses] == [200, 200]
-    assert started == ["first", "second"], "Requests for the same host should be serialized"
+    assert started == ["first", "second"], (
+        "Requests for the same host should be serialized"
+    )
     assert metrics.queue_depths["api.github.com"] == 0
-    assert metrics.wait_times["api.github.com"] and all(wait >= 0 for wait in metrics.wait_times["api.github.com"])
+    assert metrics.wait_times["api.github.com"] and all(
+        wait >= 0 for wait in metrics.wait_times["api.github.com"]
+    )
 
 
 def test_backoff_on_rate_limit_and_retry_after_respected():
@@ -131,7 +140,9 @@ def test_backoff_on_rate_limit_and_retry_after_respected():
 
 async def _test_backoff_on_rate_limit_and_retry_after_respected():
     metrics = QueueMetrics()
-    queue = RequestQueue(metrics=metrics, base_backoff=0.01, jitter=0, randomizer=lambda a, b: 0)
+    queue = RequestQueue(
+        metrics=metrics, base_backoff=0.01, jitter=0, randomizer=lambda a, b: 0
+    )
 
     attempts = 0
 
@@ -162,13 +173,17 @@ def test_persists_retry_after_for_subsequent_tasks():
 
 async def _test_persists_retry_after_for_subsequent_tasks():
     metrics = QueueMetrics()
-    queue = RequestQueue(metrics=metrics, base_backoff=0.01, jitter=0, randomizer=lambda a, b: 0)
+    queue = RequestQueue(
+        metrics=metrics, base_backoff=0.01, jitter=0, randomizer=lambda a, b: 0
+    )
 
     async def rate_limited_once():
         return FakeResponse(status=429, headers={"Retry-After": "0.03"})
 
     start_time = time.monotonic()
-    first = asyncio.create_task(queue.enqueue("uploads.github.com", rate_limited_once, max_attempts=1))
+    first = asyncio.create_task(
+        queue.enqueue("uploads.github.com", rate_limited_once, max_attempts=1)
+    )
     second_started_at = None
 
     async def second_task():
@@ -198,7 +213,10 @@ async def _test_metrics_capture_wait_time_and_depth():
         await asyncio.sleep(delay)
         return FakeResponse(status=200)
 
-    tasks = [asyncio.create_task(queue.enqueue("graph.microsoft.com", lambda d=d: op(d))) for d in (0.01, 0.02, 0.03)]
+    tasks = [
+        asyncio.create_task(queue.enqueue("graph.microsoft.com", lambda d=d: op(d)))
+        for d in (0.01, 0.02, 0.03)
+    ]
     await asyncio.gather(*tasks)
     await queue.close()
 

@@ -1,32 +1,79 @@
 # Enterprise Multi-Agent System for Microsoft Ecosystem
 
-Welcome to the **Enterprise Multi-Agent System** repository.  This project contains the high-level design and detailed specification for a multi-agent AI/automation solution built entirely on Microsoft Azure, Power Platform and Microsoft 365.  The goal of this system is to orchestrate multiple autonomous agents to handle complex workflows across departments while respecting enterprise governance and security requirements.
+This repository contains the architecture, implementation, and operating guidance
+for an event-driven multi-agent system built around Microsoft Azure and Microsoft
+365. It includes a runnable Azure Functions webhook gateway that securely connects
+GitHub, OpenAI background Responses, OneDrive for Business, and Claude processing.
 
-## Overview
+## Webhook gateway
 
-This repository includes:
+The gateway exposes:
 
-- A **master inventory** of all agents required to implement the solution.  Each agent is given a unique identifier and a concise description of its type, role, triggers and dependencies.
-- **Per-agent deep dives** describing the responsibilities, tasks, integrations, triggers, error handling and security requirements for each agent.  These documents provide implementation-ready specifications for developers and power users.
-- A step-by-step **installation & configuration framework** that covers prerequisite setup, resource provisioning, identity and security configuration, agent deployment, CI/CD integration, monitoring, testing and future extension patterns.
-- **Runtime interaction flows** that illustrate webhook intake, queue/backoff handling, caching decisions and alerting signals across the agents.  See `docs/architecture.md` for the diagrams.
+- `POST /api/webhooks/github` for signed GitHub events.
+- `POST /api/webhooks/openai` for signed OpenAI background-response events.
+- `POST /api/webhooks/anthropic` for signed Claude Managed Agents events.
+- `POST /api/webhooks/onedrive` for Microsoft Graph validation, change, and lifecycle notifications.
+- `POST /api/webhooks/events` for timestamp-signed first-party events.
+- `POST /api/webhooks/delivery` for timestamp-signed delivery callbacks.
+- POST /api/admin/onedrive/bootstrap (Function-key protected) for managed-identity subscription setup.
+- GET /api/health for configuration readiness.
 
-Refer to the `docs/` directory for detailed specifications and guidance.
+Ingress verifies provider-specific authenticity. GitHub, OpenAI, Anthropic, and
+generic events are durably staged in a recoverable Table/Blob inbox-outbox before
+acknowledgement; validated OneDrive dirty signals go directly to Service Bus to
+meet Microsoft Graph's three-second response budget and are safe to duplicate.
+GitHub repository IDs, trusted actors, safe actions, and a durable daily model-call
+quota guard the spend boundary; push is the only default GitHub event. OneDrive
+dirty-signal batches collapse to one delta job. A queue worker uses bounded SDK
+timeouts, provider-level checkpoints, and a separate first-wins result outbox, so
+ambiguous sends do not repeat completed OpenAI/Claude work.
+Claude Messages run in the worker; Claude Managed Agents session and deployment
+lifecycle events arrive through Anthropic's signed webhook API.
 
-## Architecture & Extension Notes
+Start with [the webhook setup and operations runbook](docs/webhook-setup.md).
+The original GitHub-specific contract remains in
+[GitHub webhook integration](docs/github-webhook-integration.md).
 
-- Read `docs/architecture.md` for an end-to-end view of how the session manager, API client and agents collaborate, including example interaction flows and extension guidance.
-- Each agent has a deep dive under `docs/agents/`, and the master inventory lives in `docs/master_inventory.md`.
+## Local validation
 
-## GitHub Integration
+```powershell
+python -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt
+Copy-Item local.settings.example.json local.settings.json
+python -m pytest tests/ -v --tb=short
+func start
+```
 
-- Use feature branches off `main` (e.g., `feature/<agent-id>`). Submit pull requests with linked issues so changes are traceable to business requirements.
-- Protect `main` with required checks: documentation linting if available, CI for agent code (Functions, ML, Logic Apps definitions) and integration smoke tests.
-- Store secrets for agent endpoints in GitHub Actions secrets (never in workflows). Grant least privilege for deployment identities and rotate credentials on a schedule.
-- Use PR templates to capture deployment notes, observability changes and rollback steps. Tag stakeholders (security, data, operations) for reviews when agent contracts change.
-Additional planning resources:
+Dependency ranges live in `requirements.in` and `requirements-dev.in`; the two
+`.txt` files are universal Python 3.11 hash locks. Review dependency changes, then
+regenerate both locks with `uv pip compile --python-version 3.11 --universal
+--generate-hashes` before committing them.
 
-- `docs/framework-survey.md` – survey of orchestration frameworks, their fit with provider abstraction, and queue-aligned integration options.
-## GitHub Integration
+Never commit `local.settings.json`, `.env`, API keys, webhook secrets, Graph tokens,
+or OneDrive download URLs.
 
-See `docs/github-webhook-integration.md` for the webhook-first ingestion plan, including signature verification, event routing, retry expectations, and migration steps from polling to webhooks.
+## Architecture
+
+- **Session Manager** maintains state, correlation IDs, policy checks, and routing.
+- **API Client** centralizes authentication, retries, schema validation, and telemetry.
+- **Azure Function ingress** verifies webhooks and writes a recoverable private inbox/outbox.
+- **Service Bus** provides durable delivery, duplicate detection, retry, and dead-lettering.
+- **Provider worker** performs guarded OpenAI or Claude analysis with per-provider checkpoints.
+- **Result outbox** persists the first completed result and privately carries OneDrive cursor checkpoints.
+- **OneDrive delta processing** turns change notifications into deterministic file changes.
+- **A08 Health & Recovery** monitors failures and supports controlled replay.
+
+Read [architecture.md](docs/architecture.md) for the complete runtime flows. The
+master inventory is in [master_inventory.md](docs/master_inventory.md), and each
+agent has a deep dive under `docs/agents/`.
+
+## Deployment
+
+The Azure resource template is
+[`infra/bicep/webhook-gateway.bicep`](infra/bicep/webhook-gateway.bicep). It creates
+a Linux Function App, Service Bus queues with duplicate detection and dead-lettering,
+Storage, Application Insights, and Key Vault references. Deployment uses managed
+identity for Storage, Service Bus, Key Vault, and Microsoft Graph. The GitHub OIDC
+deployment principal receives narrowly scoped Function and package-Blob roles.
+
+Use feature branches off `main`, run the full test suite, and open a pull request.
+Secrets belong in Azure Key Vault or GitHub environment secrets, never source files.
